@@ -1,0 +1,16 @@
+pointcloud_to_laserscan_node:
+  ros__parameters:
+    # Input point cloud frame — ZED publishes in its own camera frame
+    target_frame: base_link
+    transform_tolerance: 0.01
+    # Height range to keep — removes floor (below 0.1m) and ceiling
+    min_height: 0.10
+    max_height: 1.50
+    # Angular coverage — ZED 2i has 110° HFOV
+    angle_min: -0.9599   # -55 degrees in radians
+    angle_max: 0.9599    # +55 degrees
+    angle_increment: 0.00872  # 0.5 degree resolution
+    scan_time: 0.1
+    range_min: 0.3       # ZED 2i min depth
+    range_max: 5.0       # keep this conservative for indoor use
+    use_inf: true

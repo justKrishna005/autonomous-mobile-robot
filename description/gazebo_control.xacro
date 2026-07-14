@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <gazebo>
+    <!-- gz_ros2_control plugin — loads the ros2_control manager inside Gazebo -->
+    <plugin filename="gz_ros2_control-system"
+            name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+      <parameters>$(find my_bot)/config/my_controllers.yaml</parameters>
+      <!-- Publish robot description so controller_manager picks it up -->
+      <ros>
+        <remapping>~/robot_description:=/robot_description</remapping>
+      </ros>
+    </plugin>
+  </gazebo>
+
+</robot>

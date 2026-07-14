@@ -1,0 +1,31 @@
+twist_mux:
+  ros__parameters:
+
+    # --- Topics to multiplex ---
+    # Higher priority = lower number
+    topics:
+      # Teleop keyboard: highest priority
+      teleop:
+        topic:    /cmd_vel_teleop
+        timeout:  0.5     # seconds without a message before this slot releases
+        priority: 100
+
+      # Nav2 navigation stack
+      navigation:
+        topic:    /cmd_vel_nav
+        timeout:  0.5
+        priority: 10
+
+    # --- Output topic consumed by diff_drive_controller ---
+    output_topic: /diff_drive_controller/cmd_vel_unstamped
+
+    # --- Locks (optional but good practice) ---
+    locks:
+      e_stop:
+        topic:    /e_stop
+        timeout:  0.0   # 0 = latched; any True message holds the lock forever
+        priority: 255   # highest possible
+
+    # Allow twist_mux to start even if some input topics don't yet have
+    # publishers (nav2 may start later).
+    allow_disabled_topics: true

@@ -1,0 +1,288 @@
+<?xml version="1.0"?>
+<robot name="my_bot_no_encoder" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ═══════════════════════════════════════════════
+       PURPOSE
+       This robot model has NO ros2_control, NO joint_state_broadcaster,
+       and publishes NO /joint_states and NO wheel odometry whatsoever.
+
+       It exists to validate LIDAR-ONLY SLAM (no odometry prior) in
+       Gazebo, as a sim rehearsal before attempting the same on the
+       real crawler, where wheel encoders may not be available.
+
+       Locomotion is handled entirely by Gazebo's built-in DiffDrive
+       system plugin, which reads /cmd_vel directly and moves the robot
+       in the physics engine WITHOUT publishing any odometry topic or
+       TF — this mirrors a real-world "no encoders" situation as
+       closely as possible in simulation.
+
+       Geometry below matches the user's verified working URDF exactly
+       (caster at front +x, wheels set back -0.1 on x, lidar at z=0.07).
+  ═══════════════════════════════════════════════ -->
+
+  <xacro:include filename="$(find my_bot)/description/inertial_macros.xacro"/>
+
+  <!-- ═══════════════════════════════════════════════
+       PROPERTIES
+  ═══════════════════════════════════════════════ -->
+  <!-- Chassis -->
+  <xacro:property name="chassis_length"   value="0.30"/>
+  <xacro:property name="chassis_width"    value="0.25"/>
+  <xacro:property name="chassis_height"   value="0.10"/>
+  <xacro:property name="chassis_mass"     value="1.5"/>
+
+  <!-- Drive wheels -->
+  <xacro:property name="wheel_radius"     value="0.05"/>
+  <xacro:property name="wheel_width"      value="0.04"/>
+  <xacro:property name="wheel_mass"       value="0.2"/>
+  <xacro:property name="wheel_offset_x"  value="-0.1"/>
+  <xacro:property name="wheel_offset_y"  value="0.135"/>   <!-- half chassis_width + wheel_width/2 -->
+  <xacro:property name="wheel_offset_z"  value="-0.025"/>  <!-- chassis bottom - wheel_radius -->
+
+  <!-- Caster -->
+  <xacro:property name="caster_radius"    value="0.025"/>
+  <xacro:property name="caster_mass"      value="0.05"/>
+  <xacro:property name="caster_offset_x" value="0.12"/>
+  <xacro:property name="caster_offset_z" value="-0.05"/>   <!-- -(wheel_radius - caster_radius) -->
+
+  <!-- ═══════════════════════════════════════════════
+       MATERIALS
+  ═══════════════════════════════════════════════ -->
+  <material name="white">
+    <color rgba="1 1 1 1"/>
+  </material>
+  <material name="blue">
+    <color rgba="0.2 0.2 1 1"/>
+  </material>
+  <material name="black">
+    <color rgba="0 0 0 1"/>
+  </material>
+  <material name="red">
+    <color rgba="1 0 0 1"/>
+  </material>
+  <material name="grey">
+    <color rgba="0.5 0.5 0.5 1"/>
+  </material>
+
+  <!-- ═══════════════════════════════════════════════
+       BASE FOOTPRINT  (ground-projected origin)
+  ═══════════════════════════════════════════════ -->
+  <link name="base_footprint"/>
+
+  <joint name="base_footprint_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child  link="base_link"/>
+    <!-- base_link origin sits at wheel-centre height above the ground -->
+    <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ═══════════════════════════════════════════════
+       BASE LINK  (chassis)
+  ═══════════════════════════════════════════════ -->
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="${chassis_length} ${chassis_width} ${chassis_height}"/>
+      </geometry>
+      <material name="white"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="${chassis_length} ${chassis_width} ${chassis_height}"/>
+      </geometry>
+    </collision>
+    <xacro:box_inertia m="${chassis_mass}"
+                       l="${chassis_length}"
+                       w="${chassis_width}"
+                       h="${chassis_height}"/>
+  </link>
+
+  <gazebo reference="base_link">
+    <material>Gazebo/White</material>
+  </gazebo>
+
+  <!-- ═══════════════════════════════════════════════
+       DRIVE WHEEL MACRO
+       NOTE: joints remain "continuous" so wheels visually roll under
+       physics contact, but there is NO joint_state_broadcaster in this
+       package's launch file, so /joint_states is never published.
+  ═══════════════════════════════════════════════ -->
+  <xacro:macro name="drive_wheel" params="prefix reflect">
+
+    <joint name="${prefix}_wheel_joint" type="continuous">
+      <parent link="base_link"/>
+      <child  link="${prefix}_wheel_link"/>
+      <origin xyz="${wheel_offset_x} ${reflect * wheel_offset_y} ${wheel_offset_z}"
+              rpy="${-pi/2} 0 0"/>
+      <axis xyz="0 0 1"/>
+      <dynamics damping="0.01" friction="0.1"/>
+    </joint>
+
+    <link name="${prefix}_wheel_link">
+      <visual>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+        <material name="black"/>
+      </visual>
+      <collision>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+      </collision>
+      <xacro:cylinder_inertia m="${wheel_mass}"
+                              r="${wheel_radius}"
+                              h="${wheel_width}"/>
+    </link>
+
+    <gazebo reference="${prefix}_wheel_link">
+      <material>Gazebo/Black</material>
+      <mu1>0.8</mu1>
+      <mu2>0.8</mu2>
+      <kp>1e6</kp>
+      <kd>1.0</kd>
+    </gazebo>
+
+  </xacro:macro>
+
+  <xacro:drive_wheel prefix="left"  reflect="1"/>
+  <xacro:drive_wheel prefix="right" reflect="-1"/>
+
+  <!-- ═══════════════════════════════════════════════
+       CASTER WHEEL  (at the FRONT, +x)
+  ═══════════════════════════════════════════════ -->
+  <joint name="caster_wheel_joint" type="fixed">
+    <parent link="base_link"/>
+    <child  link="caster_wheel_link"/>
+    <origin xyz="${caster_offset_x} 0 ${caster_offset_z}" rpy="0 0 0"/>
+  </joint>
+
+  <link name="caster_wheel_link">
+    <visual>
+      <geometry>
+        <sphere radius="${caster_radius}"/>
+      </geometry>
+      <material name="grey"/>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="${caster_radius}"/>
+      </geometry>
+    </collision>
+    <xacro:sphere_inertia m="${caster_mass}" r="${caster_radius}"/>
+  </link>
+
+  <gazebo reference="caster_wheel_link">
+    <material>Gazebo/Grey</material>
+    <!-- Near-zero friction so it doesn't fight the diff drive -->
+    <mu1>0.001</mu1>
+    <mu2>0.001</mu2>
+  </gazebo>
+
+  <!-- ═══════════════════════════════════════════════
+       LIDAR
+  ═══════════════════════════════════════════════ -->
+  <joint name="laser_joint" type="fixed">
+    <parent link="base_link"/>
+    <child  link="laser_frame"/>
+    <origin xyz="0 0 0.07" rpy="0 0 0"/>
+  </joint>
+
+  <link name="laser_frame">
+    <visual>
+      <geometry>
+        <cylinder radius="0.05" length="0.04"/>
+      </geometry>
+      <material name="red"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.05" length="0.04"/>
+      </geometry>
+    </collision>
+    <xacro:cylinder_inertia m="0.1" h="0.04" r="0.05"/>
+  </link>
+
+  <gazebo reference="laser_frame">
+    <sensor name="laser" type="gpu_lidar">
+      <always_on>true</always_on>
+      <visualize>true</visualize>
+      <update_rate>10</update_rate>
+      <topic>/scan</topic>
+      <lidar>
+        <scan>
+          <horizontal>
+            <samples>360</samples>
+            <resolution>1</resolution>
+            <min_angle>-3.14159</min_angle>
+            <max_angle>3.14159</max_angle>
+          </horizontal>
+        </scan>
+        <range>
+          <min>0.05</min>
+          <max>12.0</max>
+          <resolution>0.01</resolution>
+        </range>
+      </lidar>
+      <gz_frame_id>laser_frame</gz_frame_id>
+    </sensor>
+  </gazebo>
+
+  <!-- ═══════════════════════════════════════════════
+       GAZEBO DIFF-DRIVE PLUGIN (replaces ros2_control entirely)
+
+       SPEED REDUCED SIGNIFICANTLY from the previous version — max
+       linear velocity dropped from 0.5 -> 0.15 m/s, max angular from
+       1.0 -> 0.4 rad/s, and acceleration limits tightened to match.
+       This matters a lot here specifically because there is NO
+       odometry prior for slam_toolbox to rely on: moving too fast
+       between lidar scans makes scan-matching lose lock and the map
+       will warp or fail outright. Slow, deliberate motion is the
+       single biggest lever you have to keep lidar-only SLAM stable.
+
+       This plugin:
+         • Subscribes to /cmd_vel directly (Twist message)
+         • Moves base_link in the physics world according to the
+           commanded linear.x and angular.z
+         • Does NOT publish odometry to ROS — odom_publish_frequency
+           is 0 and no odom topic is bridged, so NO odom source exists
+           in ROS at all.
+         • Does NOT touch /joint_states.
+  ═══════════════════════════════════════════════ -->
+  <gazebo>
+    <plugin filename="gz-sim-diff-drive-system"
+            name="gz::sim::systems::DiffDrive">
+      <left_joint>left_wheel_joint</left_joint>
+      <right_joint>right_wheel_joint</right_joint>
+      <wheel_separation>0.27</wheel_separation>
+      <wheel_radius>0.05</wheel_radius>
+
+      <!-- Acceleration limits — gentle ramps, no sudden jerks -->
+      <max_linear_acceleration>0.3</max_linear_acceleration>
+      <min_linear_acceleration>-0.3</min_linear_acceleration>
+      <max_angular_acceleration>0.6</max_angular_acceleration>
+      <min_angular_acceleration>-0.6</min_angular_acceleration>
+
+      <!-- Velocity limits — significantly reduced for stable scan matching -->
+      <max_linear_velocity>0.15</max_linear_velocity>
+      <min_linear_velocity>-0.15</min_linear_velocity>
+      <max_angular_velocity>0.4</max_angular_velocity>
+      <min_angular_velocity>-0.4</min_angular_velocity>
+
+      <!-- Topic the plugin listens on for velocity commands -->
+      <topic>cmd_vel</topic>
+
+      <!-- Deliberately NOT publishing odometry or odom TF:
+           no <odom_topic>, no <tf_topic>, and odom publishing is
+           disabled below so that NOTHING in this sim provides a
+           motion prior to slam_toolbox — exactly matching a
+           real crawler with no encoders. -->
+      <odom_publish_frequency>0</odom_publish_frequency>
+      <frame_id>odom</frame_id>
+      <child_frame_id>base_footprint</child_frame_id>
+    </plugin>
+  </gazebo>
+
+</robot>
